@@ -1,0 +1,76 @@
+{
+  "lens": {
+    "fov_deg": 220.0,
+    "model": "equidistant",
+    "poly": [
+      1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "trim_a": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "trim_b": [
+    -20.62,
+    10.78,
+    -4.64
+  ],
+  "view": {
+    "yaw": 1.2,
+    "pitch": 0.0,
+    "roll": 0.0
+  },
+  "projection": {
+    "kind": "mercator",
+    "lat_top_deg": 75.0,
+    "lat_bot_deg": -60.0
+  },
+  "blend": {
+    "seam_deg": 90.0,
+    "feather_deg": 20.0,
+    "sky_feather_deg": 7.0,
+    "hard_cut": false
+  },
+  "images": {
+    "a": {
+      "path": "/Volumes/T7 Shield/Photos/Astrophotography/_2026/26.11 Nightfall - Anza Borrego/Fisheye Scorpion and Cricket/JPG North/cleaned/STC Extras/STC_cleaned_star_trail.jpg",
+      "relative": "../../../../Volumes/T7 Shield/Photos/Astrophotography/_2026/26.11 Nightfall - Anza Borrego/Fisheye Scorpion and Cricket/JPG North/cleaned/STC Extras/STC_cleaned_star_trail.jpg"
+    },
+    "b": {
+      "path": "/Volumes/T7 Shield/Photos/Astrophotography/_2026/26.11 Nightfall - Anza Borrego/Fisheye Scorpion and Cricket/JPG South/cleaned/STC Extras/STC_cleaned_star_trail.jpg",
+      "relative": "../../../../Volumes/T7 Shield/Photos/Astrophotography/_2026/26.11 Nightfall - Anza Borrego/Fisheye Scorpion and Cricket/JPG South/cleaned/STC Extras/STC_cleaned_star_trail.jpg"
+    }
+  },
+  "circles": {
+    "a": [
+      3329.0,
+      2202.5,
+      2025.4
+    ],
+    "b": [
+      3373.9,
+      2212.3,
+      2016.1
+    ]
+  },
+  "preview": {
+    "mode": "blend",
+    "seam_line": false,
+    "overlap_zone": false
+  },
+  "export": {
+    "width": 8192,
+    "fmt": "tiff",
+    "sixteen_bit": false,
+    "interp": "lanczos",
+    "jpg_quality": 95,
+    "save_layers": false,
+    "spherical_metadata": false,
+    "use_mask": true
+  },
+  "app": "SphereJoin",
+  "version": 1
+}

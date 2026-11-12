@@ -1,0 +1,6 @@
+numpy>=1.26
+opencv-python>=4.9
+Pillow>=10
+tifffile>=2024.1
+PySide6-Essentials>=6.6
+pytest>=8
