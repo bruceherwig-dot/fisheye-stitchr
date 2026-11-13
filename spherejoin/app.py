@@ -5,8 +5,10 @@ import os
 import sys
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
+from . import __version__
 from .panes import ImagePane  # noqa: F401  (kept importable from here)
 from .workspace import Workspace
 
@@ -16,7 +18,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Fisheye StitchR")
+        self.setWindowTitle(f"Fisheye StitchR {__version__}")
         self.resize(1700, 940)
         self.workspace = Workspace()
         self.setCentralWidget(self.workspace)
@@ -25,10 +27,19 @@ class MainWindow(QMainWindow):
             act = file_menu.addAction(text)
             act.setShortcut(key)
             act.triggered.connect(slot)
+        about = file_menu.addAction("About Fisheye StitchR")
+        about.setMenuRole(QAction.AboutRole)
+        about.triggered.connect(self.show_about)
         self._hint = ("Wheel: zoom at cursor.  Drag: pan.  Double-click or F: fit.  1: 100%.  "
                       "Arrows nudge the circle center 1 px (Shift 10 px); Alt/Cmd+Up/Down changes the radius.")
         self.statusBar().showMessage(self._hint)
         self.workspace.note.connect(self.show_note)
+
+    def show_about(self):
+        QMessageBox.about(
+            self, "About Fisheye StitchR",
+            f"<b>Fisheye StitchR {__version__}</b><br>Joins two back-to-back fisheye pictures into one 360-style panorama."
+            "<br><br>App icon: \"Lens\" by Amos Kofi Commey (kweikofi) from the Noun Project.")
 
     def show_note(self, text: str, ms: int = 12000):
         self.statusBar().showMessage(text, ms)

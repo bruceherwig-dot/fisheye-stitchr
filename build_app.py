@@ -10,6 +10,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
 VERSION = (ROOT / "version.txt").read_text().strip()
+PLIST_VERSION = VERSION.split("-")[0]       # the app bundle wants plain numbers; "-beta" shows in the window title
 NAME = "Fisheye StitchR"
 
 # Qt pieces this app never uses; leaving them out keeps the download small.
@@ -30,15 +31,16 @@ def main():
            "--name", NAME, "--icon", str(ROOT / "assets" / "icon.icns"),
            "--osx-bundle-identifier", "com.bruceherwig.fisheyestitchr",
            "--paths", str(ROOT), "--distpath", str(ROOT / "dist"), "--workpath", str(ROOT / "build"),
-           "--specpath", str(ROOT / "build"), "--hidden-import", "spherejoin.app"]
+           "--specpath", str(ROOT / "build"), "--hidden-import", "spherejoin.app",
+           "--add-data", f"{ROOT / 'version.txt'}:."]
     for m in EXCLUDES:
         cmd += ["--exclude-module", m]
     cmd.append(str(ENTRY))
     subprocess.run(cmd, check=True, cwd=ROOT)
     plist = ROOT / "dist" / f"{NAME}.app" / "Contents" / "Info.plist"
     for key in ("CFBundleShortVersionString", "CFBundleVersion"):
-        subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Set :{key} {VERSION}", str(plist)], check=False)
-        subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Add :{key} string {VERSION}", str(plist)],
+        subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Set :{key} {PLIST_VERSION}", str(plist)], check=False)
+        subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Add :{key} string {PLIST_VERSION}", str(plist)],
                        check=False, stderr=subprocess.DEVNULL)
     print("Built", ROOT / "dist" / f"{NAME}.app")
 
