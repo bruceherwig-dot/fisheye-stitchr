@@ -6,3 +6,7 @@ stacks, or one Insta360 X4 photo that holds both lenses) into one 360-style pano
 Run it from source with `./run.sh`. Run the tests with `.venv/bin/python -m pytest`.
 
 Not signed or notarized, the same as Star Trail CleanR.
+
+## Credits
+
+App icon: "Lens" by Amos Kofi Commey (kweikofi) from the Noun Project, https://thenounproject.com/icon/lens-167179/
