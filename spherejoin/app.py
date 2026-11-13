@@ -105,7 +105,6 @@ def _shutdown(app: QApplication, win: MainWindow, code: int):
     flush the output streams and leave directly.
     """
     win.workspace.close_children()
-    winsparkle_updater.cleanup()               # stop the Windows update engine's thread before the process ends
     win.deleteLater()
     app.processEvents()
     for stream in (sys.stdout, sys.stderr):
@@ -126,15 +125,12 @@ def _live_update_check(app: QApplication, win: MainWindow):
                                     lambda: result.__setitem__("v", "current"),
                                     lambda: result.__setitem__("v", "error"))
     if not winsparkle_updater.check_for_updates_quiet():
-        winsparkle_updater.cleanup()
         os._exit(1)
     end = time.time() + 90
     while result["v"] is None and time.time() < end:
         app.processEvents()
         time.sleep(0.1)
-    code = {"found": 0, "current": 0, "error": 2}.get(result["v"], 3)
-    winsparkle_updater.cleanup()
-    os._exit(code)
+    os._exit({"found": 0, "current": 0, "error": 2}.get(result["v"], 3))
 
 
 def run(argv: list[str]):
@@ -162,7 +158,14 @@ def run(argv: list[str]):
         # Build gate: the built app must prove its update engine came alive, then leave. (A Windows GUI program
         # has no console, so the answer is the exit code.)
         ok = alive()
-        winsparkle_updater.cleanup()
+        # Do not leave instantly: exiting while the engine's thread is still starting crashed on Windows. Let the
+        # app run a few seconds first, the same condition a normal quit has. (Calling win_sparkle_cleanup() before
+        # exit crashed too, so we never call it; Star Trail CleanR does not either.)
+        import time
+        end = time.time() + 4
+        while time.time() < end:
+            app.processEvents()
+            time.sleep(0.05)
         os._exit(0 if ok else 1)
     if os.environ.get("FISHEYE_UPDATER_CHECK") == "1" and sys.platform == "win32":
         _live_update_check(app, win)

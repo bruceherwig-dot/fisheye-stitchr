@@ -156,14 +156,5 @@ def check_for_updates() -> bool:
         return False
 
 
-def cleanup():
-    """Stop WinSparkle's background thread. Call before the program exits, or the thread can still be running
-    while the process is torn down (a Windows access-violation crash at exit)."""
-    global _dll
-    if _dll is not None:
-        _log("cleanup")
-        try:
-            _dll.win_sparkle_cleanup()
-        except Exception as e:
-            _log(f"cleanup: EXCEPTION {e!r}")
-        _dll = None
+# NOTE: there is deliberately no cleanup() here. Calling win_sparkle_cleanup() before exit crashed the built app on
+# Windows (access violation, CI run of 2026-11-12), and Star Trail CleanR never calls it either.
