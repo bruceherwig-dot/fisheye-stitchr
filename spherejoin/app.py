@@ -8,7 +8,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
-from . import __version__
+from . import __version__, sparkle_updater
 from .panes import ImagePane  # noqa: F401  (kept importable from here)
 from .workspace import Workspace
 
@@ -27,6 +27,8 @@ class MainWindow(QMainWindow):
             act = file_menu.addAction(text)
             act.setShortcut(key)
             act.triggered.connect(slot)
+        upd = file_menu.addAction("Check for Updates...")
+        upd.triggered.connect(self.check_for_updates)
         about = file_menu.addAction("About Fisheye StitchR")
         about.setMenuRole(QAction.AboutRole)
         about.triggered.connect(self.show_about)
@@ -34,6 +36,13 @@ class MainWindow(QMainWindow):
                       "Arrows nudge the circle center 1 px (Shift 10 px); Alt/Cmd+Up/Down changes the radius.")
         self.statusBar().showMessage(self._hint)
         self.workspace.note.connect(self.show_note)
+
+    def check_for_updates(self):
+        if not sparkle_updater.check_for_updates():
+            QMessageBox.information(
+                self, "Check for Updates",
+                "Updates are checked in the installed app. Download the newest version from the "
+                "Fisheye StitchR page on GitHub.")
 
     def show_about(self):
         QMessageBox.about(
@@ -83,6 +92,11 @@ def run(argv: list[str]):
             project = a.split("=", 1)[1]           # developer shortcut: load saved settings, no menu for it
         elif not a.startswith("-"):
             paths.append(a)
+    sparkle_updater.init_sparkle()
+    if os.environ.get("FISHEYE_UPDATER_SMOKE") == "1":
+        # Build gate: the built app must prove its update engine came alive, then leave.
+        print("updater alive:", sparkle_updater.updater_alive(), flush=True)
+        os._exit(0 if sparkle_updater.updater_alive() else 1)
     ws = win.workspace
     if ws.input_mode == "one" and paths:
         ws.load_dual(paths[0])

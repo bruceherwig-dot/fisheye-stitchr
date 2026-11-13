@@ -27,6 +27,11 @@ jobs:
       - name: Launch the built app
         run: |
           "dist/Fisheye StitchR.app/Contents/MacOS/Fisheye StitchR" --quit-after-ms=4000
+      # The built app must prove its update engine started. A dead engine means nobody ever gets an update,
+      # and nothing else would notice.
+      - name: Updater-alive gate
+        run: |
+          FISHEYE_UPDATER_SMOKE=1 "dist/Fisheye StitchR.app/Contents/MacOS/Fisheye StitchR"
       - name: Build the disk image
         # DMG, not ZIP, so macOS does not run the app from a quarantined download location.
         # Retried because hdiutil sometimes fails with "Resource busy" on GitHub's runners.
@@ -67,3 +72,52 @@ jobs:
             ## Fisheye StitchR ${{ github.ref_name }}
 
             **Mac (Apple Silicon: M1, M2, M3, M4)**: download FisheyeStitchR-Mac-AppleSilicon.dmg, open it, and drag Fisheye StitchR into Applications. The first time you open it, macOS shows a security warning because the app is not notarized. Click Done, then System Settings > Privacy & Security > Open Anyway. The disk image includes an "Open Me First.txt" with the steps.
+
+  publish-appcast:
+    # Puts the new version into the auto-update feed, then FAILS unless the live feed shows it.
+    # "Release done" means this job is green, not just that the app built.
+    needs: release
+    runs-on: macos-latest        # the signing tool is a Mac program
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Check out the feed branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-pub
+      - name: Write signing key from secret
+        env:
+          KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$KEY" > "$RUNNER_TEMP/sparkle_key"
+          chmod 600 "$RUNNER_TEMP/sparkle_key"
+      - name: Sign the installer and update the feed
+        run: |
+          chmod +x vendored/sparkle-bin/sign_update
+          python3 scripts/publish_appcast.py "${GITHUB_REF_NAME}" \
+            --installer artifacts/FisheyeStitchR-Mac/FisheyeStitchR-Mac-AppleSilicon.dmg \
+            --key-file "$RUNNER_TEMP/sparkle_key" \
+            --pages-dir gh-pages-pub
+      - name: Commit and push the feed
+        run: |
+          cd gh-pages-pub
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Feed already current."
+          else
+            git commit -m "Publish ${GITHUB_REF_NAME} to the update feed"
+            git push origin gh-pages
+          fi
+      - name: Verify the live feed (hard gate)
+        run: python3 scripts/publish_appcast.py "${GITHUB_REF_NAME}" --verify
