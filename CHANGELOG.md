@@ -2,7 +2,7 @@
 
 ---
 
-## v0.9-beta (not released yet)
+## v0.9-beta (2026-11-12)
 First version, before any public release. Stitches two back-to-back fisheye pictures, or one Insta360 X4 photo with both lenses, into a 360-style panorama.
 - Two input modes: two separate photos, or one photo with both lenses (Insta360 X4 recognized by its camera tag or its exact picture size).
 - Layouts: equirectangular, Mercator, Gall and tiny planet, with a Planet/Tunnel slider.
