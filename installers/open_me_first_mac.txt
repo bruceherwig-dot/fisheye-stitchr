@@ -1,0 +1,16 @@
+Opening Fisheye StitchR on Mac
+
+Fisheye StitchR is free and not yet notarized by Apple, so macOS shows a
+security warning the first time. This is normal and safe. To open it:
+
+1. Drag Fisheye StitchR into your Applications folder.
+2. Double-click it. macOS says it cannot be opened. Click Done.
+3. Open System Settings (Apple menu, top-left).
+4. Go to Privacy & Security and scroll down.
+5. Find the line about Fisheye StitchR being blocked and click Open Anyway.
+6. Enter your password or use Touch ID, then click Open Anyway again.
+
+You only do this once. After that it opens normally.
+
+If macOS asks whether Fisheye StitchR may access your Desktop, Documents,
+Downloads or an external drive, click Allow. It needs that to read your photos.
