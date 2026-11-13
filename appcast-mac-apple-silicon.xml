@@ -5,5 +5,13 @@
         <link>https://github.com/bruceherwig-dot/fisheye-stitchr</link>
         <description>Updates for Fisheye StitchR</description>
         <language>en</language>
+        <item>
+            <title>Version 0.10-beta</title>
+            <pubDate>Fri, 13 Nov 2026 02:03:18 +0000</pubDate>
+            <sparkle:version>0.10</sparkle:version>
+            <sparkle:shortVersionString>0.10-beta</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/bruceherwig-dot/fisheye-stitchr/releases/download/v0.10-beta/FisheyeStitchR-Mac-AppleSilicon.dmg" length="95865692" type="application/octet-stream" sparkle:edSignature="vVUM9F/g6YO6LlvBmdJzCgABM5ODzMSmhJ12BaSDf1L4FJdUVZfIkvkbx3LzkKn7uEtqohalJstIJmX+ZoNgBg=="/>
+        </item>
     </channel>
 </rss>
