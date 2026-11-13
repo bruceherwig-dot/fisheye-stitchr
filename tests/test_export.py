@@ -43,7 +43,7 @@ def test_recommended_width_matches_center_detail(world):
 
 def test_default_name_sits_next_to_image_a_and_follows_format():
     p = default_output_path("/x/y/photo.jpg", "tiff")
-    assert p == "/x/y/photo_spherejoin_equirect.tif"
+    assert os.path.normpath(p) == os.path.normpath("/x/y/photo_spherejoin_equirect.tif")
     assert default_output_path("/x/y/photo.jpg", "png").endswith(".png")
     assert estimate_memory_mb(8192, 2, False) < estimate_memory_mb(8192, 2, True)
 

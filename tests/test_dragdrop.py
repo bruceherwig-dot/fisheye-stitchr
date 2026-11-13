@@ -1,4 +1,5 @@
 """Drag and drop of photos onto the picture panes, using simulated drag events."""
+import os
 import warnings
 
 import cv2
@@ -10,6 +11,11 @@ from PySide6.QtWidgets import QApplication
 
 from spherejoin.panes import ImagePane
 from spherejoin.workspace import Workspace
+
+
+def same(a, b):
+    """Paths compared the way the operating system does: Qt hands over forward slashes on Windows."""
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -75,18 +81,18 @@ def test_one_photo_lands_on_the_pane_it_was_dropped_on(ws, pics):
     m = mime(pics["a_front.png"])
     assert enter(ws.pane_a, m).isAccepted()
     assert drop(ws.pane_a, m).isAccepted()
-    assert ws.pane_a.path == pics["a_front.png"] and ws.pane_b.array() is None
+    assert same(ws.pane_a.path, pics["a_front.png"]) and ws.pane_b.array() is None
     m2 = mime(pics["b_back.png"])
     enter(ws.pane_b, m2)
     drop(ws.pane_b, m2)
-    assert ws.pane_b.path == pics["b_back.png"] and ws.pane_a.path == pics["a_front.png"]
+    assert same(ws.pane_b.path, pics["b_back.png"]) and same(ws.pane_a.path, pics["a_front.png"])
     assert ws.ready()
 
 
 def test_a_second_single_drop_replaces_the_photo_on_that_pane(ws, pics):
     for name in ("a_front.png", "c_extra.png"):
         m = mime(pics[name]); enter(ws.pane_a, m); drop(ws.pane_a, m)
-    assert ws.pane_a.path == pics["c_extra.png"]
+    assert same(ws.pane_a.path, pics["c_extra.png"])
 
 
 @pytest.mark.parametrize("target", ["a", "b"])
@@ -95,14 +101,14 @@ def test_two_photos_fill_a_then_b_by_file_name_whichever_pane_got_them(ws, pics,
     m = mime(pics["b_back.png"], pics["a_front.png"])         # dropped in the "wrong" order on purpose
     enter(pane, m)
     drop(pane, m)
-    assert ws.pane_a.path == pics["a_front.png"] and ws.pane_b.path == pics["b_back.png"]
+    assert same(ws.pane_a.path, pics["a_front.png"]) and same(ws.pane_b.path, pics["b_back.png"])
     assert "as A" in ws.preview.status.text() and "as B" in ws.preview.status.text()
 
 
 def test_more_than_two_photos_uses_the_first_two_and_says_so(ws, pics):
     m = mime(pics["c_extra.png"], pics["b_back.png"], pics["a_front.png"])
     enter(ws.pane_a, m); drop(ws.pane_a, m)
-    assert ws.pane_a.path == pics["a_front.png"] and ws.pane_b.path == pics["b_back.png"]
+    assert same(ws.pane_a.path, pics["a_front.png"]) and same(ws.pane_b.path, pics["b_back.png"])
     assert "first two" in ws.preview.status.text()
 
 
@@ -114,12 +120,12 @@ def test_other_files_are_ignored_with_a_note_and_nothing_changes(ws, pics):
         enter(ws.pane_a, m)
         ev = drop(ws.pane_a, m)
         assert not ev.isAccepted()
-        assert ws.pane_a.path == before
+        assert same(ws.pane_a.path, before)
         assert "JPG, PNG or TIFF" in ws.pane_a.status.text()
     # A mix keeps just the pictures.
     m = mime(pics["note.txt"], pics["b_back.png"])
     enter(ws.pane_b, m); drop(ws.pane_b, m)
-    assert ws.pane_b.path == pics["b_back.png"]
+    assert same(ws.pane_b.path, pics["b_back.png"])
 
 
 def test_a_web_link_is_not_a_file_and_is_turned_away(app):
@@ -146,7 +152,7 @@ def test_the_pane_shows_a_border_while_dragging_and_clears_it_afterwards(ws, pic
 def test_upper_case_extensions_count(ws, pics):
     m = mime(pics["UPPER.PNG"])
     enter(ws.pane_a, m); drop(ws.pane_a, m)
-    assert ws.pane_a.path == pics["UPPER.PNG"]
+    assert same(ws.pane_a.path, pics["UPPER.PNG"])
 
 
 def test_dropped_photos_are_what_reopens_next_time(app, pics):

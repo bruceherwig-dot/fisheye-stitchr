@@ -50,4 +50,4 @@ def test_image_found_by_relative_path_after_the_folder_moves(tmp_path):
 
 
 def test_default_path_is_next_to_image_a():
-    assert default_project_path("/x/y/a.jpg") == "/x/y/a.spherejoin.json"
+    assert os.path.normpath(default_project_path("/x/y/a.jpg")) == os.path.normpath("/x/y/a.spherejoin.json")
