@@ -1,0 +1,98 @@
+name: Windows updater INSTALL test
+
+# The half CI otherwise never tests. The build already proves the app can FIND an update. This proves what
+# happens when the user clicks install: WinSparkle hands the downloaded file to Windows with no arguments
+# (ShellExecuteEx) and lets the file association decide. So this reads the LIVE Windows feed, downloads the
+# enclosure it advertises, runs it the same way, and reports what changed. It publishes nothing.
+#
+# Run it by hand from the Actions tab. Needs two Windows releases: install the older one (baseline_tag), then
+# run whatever the feed currently offers.
+#   FAIL    executing the enclosure started no installer (the feed advertises something Windows cannot run)
+#   PARTIAL an installer started but nobody clicked the wizard, so the version did not change (expected here)
+#   PASS    the installed version changed unattended
+
+on:
+  workflow_dispatch:
+    inputs:
+      appcast:
+        description: "Appcast feed to test"
+        required: true
+        default: "https://bruceherwig-dot.github.io/fisheye-stitchr/appcast-windows.xml"
+      baseline_tag:
+        description: "Release tag to install first (the older version)"
+        required: true
+
+jobs:
+  install-test:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Install the baseline version
+        run: |
+          $tag = "${{ inputs.baseline_tag }}"
+          gh release download $tag --repo bruceherwig-dot/fisheye-stitchr --pattern "FisheyeStitchRSetup.zip" --dir baseline
+          Expand-Archive baseline\FisheyeStitchRSetup.zip -DestinationPath baseline\x
+          $exe = Get-ChildItem baseline\x -Filter *.exe -Recurse | Select-Object -First 1
+          # Defender scanning every extracted file can hang the install; exclude the target and bound the wait.
+          Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\Programs" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath (Get-Location).Path -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList "/VERYSILENT","/NORESTART","/SUPPRESSMSGBOXES","/SP-" -PassThru
+          if (-not $p.WaitForExit(900000)) { Write-Host "BASELINE INSTALL HUNG"; $p.Kill(); exit 1 }
+          Write-Host "baseline installer exit code: $($p.ExitCode)"
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Record the installed version
+        id: before
+        run: |
+          $root = "$env:LOCALAPPDATA\Programs\FisheyeStitchR"
+          $f = Get-ChildItem $root -Filter version.txt -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $f) { Write-Host "BASELINE INSTALL FAILED: no version.txt under $root"; exit 1 }
+          "path=$($f.FullName)" >> $env:GITHUB_OUTPUT
+          $v = (Get-Content $f.FullName).Trim()
+          Write-Host "installed baseline version: $v"
+          "version=$v" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Take the enclosure the live feed advertises
+        id: feed
+        run: |
+          $xml = [xml](Invoke-WebRequest -Uri "${{ inputs.appcast }}" -UseBasicParsing).Content
+          $item = $xml.rss.channel.item | Select-Object -First 1
+          if (-not $item) { Write-Host "THE FEED HAS NO ENTRIES"; exit 1 }
+          $url = $item.enclosure.url
+          Write-Host "feed offers $($item.title); enclosure: $url"
+          "url=$url" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Download it and run it the way WinSparkle does
+        id: run
+        run: |
+          $url = "${{ steps.feed.outputs.url }}"
+          $name = Split-Path $url -Leaf
+          Invoke-WebRequest -Uri $url -OutFile $name -UseBasicParsing
+          $before = (Get-Process | Select-Object -ExpandProperty Id)
+          try { Start-Process -FilePath (Resolve-Path $name) -PassThru | Out-Null }
+          catch { Write-Host "Windows refused to run it: $($_.Exception.Message)" }
+          Start-Sleep -Seconds 60
+          # Inno Setup always spawns a *.tmp child. A .zip starts no such thing.
+          $inst = Get-Process | Where-Object { $_.ProcessName -match "FisheyeStitchRSetup|.*\.tmp" -and $before -notcontains $_.Id }
+          if ($inst) { Write-Host "INSTALLER STARTED"; "installer_started=yes" >> $env:GITHUB_OUTPUT }
+          else { Write-Host "NO INSTALLER PROCESS"; "installer_started=no" >> $env:GITHUB_OUTPUT }
+          Start-Sleep -Seconds 120
+        shell: pwsh
+
+      - name: Did the installed version change?
+        run: |
+          $before = "${{ steps.before.outputs.version }}"
+          $after = Get-Content "${{ steps.before.outputs.path }}" -ErrorAction SilentlyContinue
+          Write-Host "installed before: $before    installed after: $after    installer started: ${{ steps.run.outputs.installer_started }}"
+          if ($after -and $after.Trim() -ne $before.Trim()) { Write-Host "PASS: the version changed unattended."; exit 0 }
+          if ("${{ steps.run.outputs.installer_started }}" -eq "yes") {
+            Write-Host "PARTIAL: the installer started; the version did not change because nobody clicked the wizard. Expected."
+            exit 0
+          }
+          Write-Host "FAIL: executing what the feed advertises started no installer."
+          exit 1
+        shell: pwsh

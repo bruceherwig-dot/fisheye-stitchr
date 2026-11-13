@@ -28,7 +28,7 @@ def test_version_is_read_from_the_tag():
 
 def test_new_entry_goes_on_top_and_old_ones_are_untouched():
     p = _publisher()
-    item = p.build_item("v0.10-beta", "0.10", "0.10-beta", "SIG", 123, "Fri, 13 Nov 2026 00:00:00 +0000")
+    item = p.build_item(p.PLATFORMS[0], "v0.10-beta", "0.10", "0.10-beta", "SIG", 123, "Fri, 13 Nov 2026 00:00:00 +0000")
     out = p.insert_item(FEED, item)
     assert out.index("0.10-beta") < out.index("<item><sparkle:version")
     assert FEED.split("\n")[1] in out                                   # the old entry is byte-for-byte there
@@ -56,11 +56,52 @@ def test_the_feed_address_in_the_app_matches_the_publisher():
 
 def test_ci_gates_and_publishes():
     wf = (ROOT / ".github" / "workflows" / "build.yml").read_text()
-    assert "FISHEYE_UPDATER_SMOKE=1" in wf          # the built app must prove its update engine started
+    assert "FISHEYE_UPDATER_SMOKE=1" in wf and 'FISHEYE_UPDATER_SMOKE = "1"' in wf   # Mac and Windows both prove it
+    assert 'FISHEYE_UPDATER_CHECK = "1"' in wf       # Windows does a real check against the live feed
     assert "publish-appcast:" in wf and "--verify" in wf
+    assert "needs: lint" in wf and "pyflakes" in wf  # no build starts if a name is undefined
 
 
 def test_running_from_source_does_not_start_an_updater():
     from spherejoin import sparkle_updater
     assert sparkle_updater.init_sparkle() is False
     assert sparkle_updater.check_for_updates() is False
+
+
+def test_windows_feed_points_at_an_installer_never_an_archive():
+    """WinSparkle runs the downloaded file with no arguments: an .exe installs, a .zip installs nothing."""
+    import pytest
+    p = _publisher()
+    win = [x for x in p.PLATFORMS if x["key"] == "windows"][0]
+    assert win["release_filename"].lower().endswith((".exe", ".msi"))
+    bad = dict(win, release_filename="FisheyeStitchRSetup.zip")
+    with pytest.raises(SystemExit):
+        p.build_item(bad, "v0.10-beta", "0.10", "0.10-beta", "SIG", 1, "x")
+
+
+def test_both_installers_ship_and_both_feeds_are_verified():
+    wf = (ROOT / ".github" / "workflows" / "build.yml").read_text()
+    assert "FisheyeStitchR-Windows/FisheyeStitchRSetup.exe" in wf     # the updater needs the bare installer
+    assert "FisheyeStitchR-Windows/FisheyeStitchRSetup.zip" in wf     # the website needs the zip
+    p = _publisher()
+    assert set(p.LIVE_FEEDS) == {"mac-apple-silicon", "windows"}
+
+
+def test_windows_updater_declares_the_feed_url_as_a_narrow_string():
+    """Declared wide, the engine reads the URL as the single letter "h" and every check fails."""
+    src = (ROOT / "spherejoin" / "winsparkle_updater.py").read_text()
+    assert "win_sparkle_set_appcast_url.argtypes = [ctypes.c_char_p]" in src
+
+
+def test_windows_build_carries_the_update_key_and_the_dll():
+    b = (ROOT / "build_app.py").read_text()
+    assert "EdDSAPub" in b and "WinSparkle.dll" in b
+    assert (ROOT / "vendored" / "winsparkle" / "WinSparkle.dll").exists()
+    assert (ROOT / "assets" / "icon.ico").exists() and (ROOT / "installer" / "FisheyeStitchR.iss").exists()
+    wf = (ROOT / ".github" / "workflows" / "build.yml").read_text()
+    assert "check_win_resource.py" in wf
+
+
+def test_the_windows_feed_in_the_app_matches_the_publisher():
+    from spherejoin import app
+    assert app.WIN_FEED_URL == _publisher().LIVE_FEEDS["windows"]

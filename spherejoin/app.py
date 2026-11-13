@@ -4,17 +4,33 @@ from __future__ import annotations
 import os
 import sys
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
-from . import __version__, sparkle_updater
+from . import __version__, sparkle_updater, winsparkle_updater
 from .panes import ImagePane  # noqa: F401  (kept importable from here)
 from .workspace import Workspace
 
 
+# Where installed Windows apps look for updates (written by CI on every release; see AUTO_UPDATE.md).
+WIN_FEED_URL = "https://bruceherwig-dot.github.io/fisheye-stitchr/appcast-windows.xml"
+RELEASES_URL = "https://github.com/bruceherwig-dot/fisheye-stitchr/releases/latest"
+
+
+def numeric_version() -> str:
+    """'0.10-beta' -> '0.10': the plain number the update engines compare."""
+    return __version__.split("-")[0]
+
+
 class MainWindow(QMainWindow):
     """Thin shell around the Workspace."""
+
+    # Outcomes of a quiet Windows update check. WinSparkle calls back on its own thread; emitting a signal
+    # hops to the UI thread, where dialogs are allowed.
+    update_found = Signal()
+    update_current = Signal()
+    update_failed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -36,13 +52,35 @@ class MainWindow(QMainWindow):
                       "Arrows nudge the circle center 1 px (Shift 10 px); Alt/Cmd+Up/Down changes the radius.")
         self.statusBar().showMessage(self._hint)
         self.workspace.note.connect(self.show_note)
+        self.update_found.connect(winsparkle_updater.check_for_updates)       # confirmed: show the engine's window
+        self.update_current.connect(lambda: QMessageBox.information(
+            self, "Check for Updates", f"You are up to date. Fisheye StitchR {__version__} is the newest version."))
+        self.update_failed.connect(self._update_check_failed)
+        winsparkle_updater.set_handlers(self.update_found.emit, self.update_current.emit, self.update_failed.emit)
+
+    def _update_check_failed(self):
+        box = QMessageBox(self)
+        box.setWindowTitle("Check for Updates")
+        box.setText("Could not check for updates.")
+        box.setInformativeText("Security software or a network setting may be blocking the check. "
+                               "You can download the newest version from GitHub.")
+        get = box.addButton("Open the download page", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Close)
+        box.exec()
+        if box.clickedButton() is get:
+            QDesktopServices.openUrl(QUrl(RELEASES_URL))
 
     def check_for_updates(self):
-        if not sparkle_updater.check_for_updates():
-            QMessageBox.information(
-                self, "Check for Updates",
-                "Updates are checked in the installed app. Download the newest version from the "
-                "Fisheye StitchR page on GitHub.")
+        if sys.platform == "win32":
+            # Quiet first: nothing from the engine's own windows unless it confirms a newer version exists.
+            if winsparkle_updater.check_for_updates_quiet() or winsparkle_updater.check_for_updates():
+                return
+        elif sparkle_updater.check_for_updates():
+            return
+        QMessageBox.information(
+            self, "Check for Updates",
+            "Updates are checked in the installed app. Download the newest version from the "
+            "Fisheye StitchR page on GitHub.")
 
     def show_about(self):
         QMessageBox.about(
@@ -77,6 +115,24 @@ def _shutdown(app: QApplication, win: MainWindow, code: int):
     os._exit(code)
 
 
+def _live_update_check(app: QApplication, win: MainWindow):
+    """Build gate (Windows): do a REAL update check against the live feed and exit with the result.
+    "The engine loads" was never proof that a check works. Exit 0: feed fetched and parsed (update found or
+    already current). 1: the engine could not start a check. 2: the engine reported an error. 3: no answer in 90 s."""
+    import time
+    result = {"v": None}
+    winsparkle_updater.set_handlers(lambda: result.__setitem__("v", "found"),
+                                    lambda: result.__setitem__("v", "current"),
+                                    lambda: result.__setitem__("v", "error"))
+    if not winsparkle_updater.check_for_updates_quiet():
+        os._exit(1)
+    end = time.time() + 90
+    while result["v"] is None and time.time() < end:
+        app.processEvents()
+        time.sleep(0.1)
+    os._exit({"found": 0, "current": 0, "error": 2}.get(result["v"], 3))
+
+
 def run(argv: list[str]):
     """Start the app. A hidden --quit-after-ms=N flag closes it after N milliseconds (for testing)."""
     app = QApplication(argv)
@@ -92,11 +148,18 @@ def run(argv: list[str]):
             project = a.split("=", 1)[1]           # developer shortcut: load saved settings, no menu for it
         elif not a.startswith("-"):
             paths.append(a)
-    sparkle_updater.init_sparkle()
+    if sys.platform == "win32":
+        winsparkle_updater.init_winsparkle(WIN_FEED_URL, "Fisheye StitchR", numeric_version(), "Fisheye StitchR")
+        alive = winsparkle_updater.updater_alive
+    else:
+        sparkle_updater.init_sparkle()
+        alive = sparkle_updater.updater_alive
     if os.environ.get("FISHEYE_UPDATER_SMOKE") == "1":
-        # Build gate: the built app must prove its update engine came alive, then leave.
-        print("updater alive:", sparkle_updater.updater_alive(), flush=True)
-        os._exit(0 if sparkle_updater.updater_alive() else 1)
+        # Build gate: the built app must prove its update engine came alive, then leave. (A Windows GUI program
+        # has no console, so the answer is the exit code.)
+        os._exit(0 if alive() else 1)
+    if os.environ.get("FISHEYE_UPDATER_CHECK") == "1" and sys.platform == "win32":
+        _live_update_check(app, win)
     ws = win.workspace
     if ws.input_mode == "one" and paths:
         ws.load_dual(paths[0])

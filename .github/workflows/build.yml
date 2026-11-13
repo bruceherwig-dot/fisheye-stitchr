@@ -1,6 +1,6 @@
 name: Build Fisheye StitchR
 
-# Runs on every version tag (v0.9-beta, v1.0 ...) and on demand from the Actions tab.
+# Runs on every version tag (v0.10-beta, v1.0 ...) and on demand from the Actions tab.
 # A manual run builds and tests everything but does not publish a release.
 on:
   push:
@@ -8,7 +8,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    # An undefined name is a crash waiting for a fresh user to find it (Star Trail CleanR shipped one: a
+    # one-line drop in a refactor). Blocks every build below. Fix the name; never exclude the file.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Pyflakes (undefined names)
+        run: |
+          pip install pyflakes
+          python -m pyflakes spherejoin scripts build_app.py > pyflakes.txt || true
+          cat pyflakes.txt
+          if grep -q "undefined name" pyflakes.txt; then echo "UNDEFINED NAME FOUND"; exit 1; fi
+
   build-mac:
+    needs: lint
     runs-on: macos-latest        # Apple Silicon
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +34,7 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt pyinstaller pyflakes
       # Tests run on the machine that builds the app, with the libraries it just installed.
       - name: Tests
         run: python -m pytest -q
@@ -54,8 +71,90 @@ jobs:
           name: FisheyeStitchR-Mac
           path: FisheyeStitchR-Mac-AppleSilicon.dmg
 
+  build-windows:
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pyflakes pefile
+        shell: pwsh
+      - name: Tests
+        run: python -m pytest -q
+        shell: pwsh
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+      - name: Build the app
+        run: python build_app.py
+        shell: pwsh
+      - name: Update-key gate
+        # WinSparkle verifies update signatures with a public key stored inside the .exe.
+        run: python scripts/check_win_resource.py dist\FisheyeStitchR\FisheyeStitchR.exe
+        shell: pwsh
+      # A Windows GUI program detaches from the console, so every gate below reads the exit code through
+      # Start-Process -Wait.
+      - name: Launch the built app
+        run: |
+          $p = Start-Process -FilePath "dist\FisheyeStitchR\FisheyeStitchR.exe" -ArgumentList "--quit-after-ms=4000" -Wait -PassThru
+          Write-Host "launch exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
+        shell: pwsh
+      - name: Updater-alive gate
+        # The built app must prove WinSparkle loaded. (Star Trail CleanR's Mac engine shipped dead for 50
+        # versions because nothing in CI ever started it.)
+        run: |
+          $env:FISHEYE_UPDATER_SMOKE = "1"
+          $p = Start-Process -FilePath "dist\FisheyeStitchR\FisheyeStitchR.exe" -Wait -PassThru
+          Write-Host "updater smoke exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
+        shell: pwsh
+      - name: Updater live-check gate
+        # "The engine loads" is not proof a check WORKS. The built app does a REAL check against the live feed
+        # and the build fails if the engine reports an error. (Star Trail CleanR's Windows updater was broken for
+        # every user for almost three months while the load check passed.)
+        run: |
+          $env:FISHEYE_UPDATER_CHECK = "1"
+          $p = Start-Process -FilePath "dist\FisheyeStitchR\FisheyeStitchR.exe" -Wait -PassThru
+          Write-Host "updater live-check exit code: $($p.ExitCode)"
+          switch ($p.ExitCode) {
+            0 { Write-Host "RESULT: the update check succeeded on a clean Windows machine." }
+            1 { Write-Host "RESULT: the engine could not start a check at all." }
+            2 { Write-Host "RESULT: the engine failed to retrieve update information." }
+            3 { Write-Host "RESULT: the check never came back within 90 seconds." }
+            default { Write-Host "RESULT: unexpected exit code." }
+          }
+          if ($p.ExitCode -ne 0) { exit 1 }
+        shell: pwsh
+      - name: Read version
+        id: version
+        run: echo "version=$((Get-Content version.txt).Split('-')[0])" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+      - name: Build the installer (Inno Setup)
+        run: iscc /DAppVersion=${{ steps.version.outputs.version }} installer\FisheyeStitchR.iss
+        shell: pwsh
+      - name: Wrap the installer in a zip
+        # Edge SmartScreen quarantines unsigned .exe downloads behind a dialog whose "Keep" option is nearly
+        # hidden. A zip sidesteps that for people downloading by hand. NoCompression: the .exe is already compressed.
+        run: |
+          Copy-Item "installers\open_me_first_windows.txt" "installer\Open Me First.txt"
+          Compress-Archive -Path installer\FisheyeStitchRSetup.exe, "installer\Open Me First.txt" -DestinationPath installer\FisheyeStitchRSetup.zip -CompressionLevel NoCompression
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          # BOTH files ship on purpose. The zip is for people downloading from the website. The bare .exe is what
+          # the UPDATER needs: WinSparkle hands the downloaded file to Windows, and a zip would only open
+          # Explorer and install nothing.
+          name: FisheyeStitchR-Windows
+          path: |
+            installer/FisheyeStitchRSetup.zip
+            installer/FisheyeStitchRSetup.exe
+
   release:
-    needs: build-mac
+    needs: [build-mac, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -67,15 +166,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
-          files: FisheyeStitchR-Mac/FisheyeStitchR-Mac-AppleSilicon.dmg
+          files: |
+            FisheyeStitchR-Mac/FisheyeStitchR-Mac-AppleSilicon.dmg
+            FisheyeStitchR-Windows/FisheyeStitchRSetup.zip
+            FisheyeStitchR-Windows/FisheyeStitchRSetup.exe
           body: |
             ## Fisheye StitchR ${{ github.ref_name }}
 
             **Mac (Apple Silicon: M1, M2, M3, M4)**: download FisheyeStitchR-Mac-AppleSilicon.dmg, open it, and drag Fisheye StitchR into Applications. The first time you open it, macOS shows a security warning because the app is not notarized. Click Done, then System Settings > Privacy & Security > Open Anyway. The disk image includes an "Open Me First.txt" with the steps.
 
+            **Windows**: download FisheyeStitchRSetup.zip, right-click it and choose Extract All, then double-click FisheyeStitchRSetup.exe. If Windows shows a blue "Windows protected your PC" screen, click More info, then Run anyway. (FisheyeStitchRSetup.exe by itself is the same installer; the update engine uses it.)
+
   publish-appcast:
-    # Puts the new version into the auto-update feed, then FAILS unless the live feed shows it.
-    # "Release done" means this job is green, not just that the app built.
+    # Puts the new version into the auto-update feeds, then FAILS unless every live feed shows it.
+    # "Release done" means this job is green, not just that the apps built.
     needs: release
     runs-on: macos-latest        # the signing tool is a Mac program
     if: startsWith(github.ref, 'refs/tags/v')
@@ -100,24 +204,24 @@ jobs:
         run: |
           printf '%s' "$KEY" > "$RUNNER_TEMP/sparkle_key"
           chmod 600 "$RUNNER_TEMP/sparkle_key"
-      - name: Sign the installer and update the feed
+      - name: Sign the installers and update the feeds
         run: |
           chmod +x vendored/sparkle-bin/sign_update
           python3 scripts/publish_appcast.py "${GITHUB_REF_NAME}" \
-            --installer artifacts/FisheyeStitchR-Mac/FisheyeStitchR-Mac-AppleSilicon.dmg \
+            --artifacts-dir artifacts \
             --key-file "$RUNNER_TEMP/sparkle_key" \
             --pages-dir gh-pages-pub
-      - name: Commit and push the feed
+      - name: Commit and push the feeds
         run: |
           cd gh-pages-pub
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
-            echo "Feed already current."
+            echo "Feeds already current."
           else
-            git commit -m "Publish ${GITHUB_REF_NAME} to the update feed"
+            git commit -m "Publish ${GITHUB_REF_NAME} to the update feeds"
             git push origin gh-pages
           fi
-      - name: Verify the live feed (hard gate)
+      - name: Verify the live feeds (hard gate)
         run: python3 scripts/publish_appcast.py "${GITHUB_REF_NAME}" --verify
