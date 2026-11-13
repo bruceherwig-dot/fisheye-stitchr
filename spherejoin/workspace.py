@@ -405,12 +405,13 @@ class Workspace(QWidget):
             self._lens_saved = None
             self.controls.apply_lens_preset(fov, model, trim_a, trim_b)
 
-    def load_dual(self, path: str) -> bool:
+    def load_dual(self, path: str, quiet: bool = False) -> bool:
         """Fill A and B from one photo that holds both lens circles side by side."""
         try:
             arr = load_image(path)
         except Exception as e:
-            QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
+            if not quiet:
+                QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
             return False
         left, right = dual.split_halves(arr)
         preset = dual.preset_for(path, (arr.shape[1], arr.shape[0]))
@@ -455,14 +456,13 @@ class Workspace(QWidget):
         opened = []
         if self.input_mode == "one":
             p = ui_state.get_str("last_files/both")
-            if p and os.path.isfile(p) and self.load_dual(p):
+            if p and os.path.isfile(p) and self.load_dual(p, quiet=True):
                 self.note.emit("Reopened your last photo. Drop a new photo on the A or B picture to replace it.")
                 return [p]
             return []
         for pane, key in ((self.pane_a, "last_files/a"), (self.pane_b, "last_files/b")):
             p = ui_state.get_str(key)
-            if p and os.path.isfile(p):
-                pane.load(p)
+            if p and os.path.isfile(p) and pane.load(p, quiet=True):
                 opened.append(p)
         if opened:
             self.note.emit("Reopened your last photos. Drop new photos on the A or B picture to replace them.")

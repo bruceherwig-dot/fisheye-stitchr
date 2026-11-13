@@ -175,14 +175,17 @@ class ImagePane(QWidget):
         e.acceptProposedAction()
         self.files_dropped.emit(paths)
 
-    def load(self, path: str):
+    def load(self, path: str, quiet: bool = False) -> bool:
+        """Load a photo. quiet=True (used when reopening last time's photos) skips the error box."""
         try:
             arr = load_image(path)
         except Exception as e:  # show the problem, keep the app alive
-            QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
-            return
+            if not quiet:
+                QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
+            return False
         ui_state.set_str(f"last_files/{self.title[:1].lower()}", os.path.abspath(path))   # reopened next time
         self.load_array(arr, path, os.path.basename(path))
+        return True
 
     def set_input_mode(self, mode: str):
         """"two": one photo per pane. "one": both panes are filled from a single two-lens photo."""

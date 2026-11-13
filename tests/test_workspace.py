@@ -512,3 +512,22 @@ def test_loading_a_different_photo_updates_what_is_remembered(app, files, tmp_pa
     for t in (w2._quick, w2._full, w2._compose):
         t.stop()
     w2.close()
+
+
+def test_a_last_photo_that_cannot_be_read_gives_no_error_box_at_start(app, files, monkeypatch):
+    """Reopening last time's photos must never pop an error (the drive may be off, or macOS may block it)."""
+    from PySide6.QtWidgets import QMessageBox
+    paths, _ = files
+    w = Workspace()
+    w.pane_a.load(paths[0]); w.pane_b.load(paths[1])
+    w.close()
+    shown = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: shown.append(a))
+    import spherejoin.panes as panes_mod
+    def boom(path):
+        raise PermissionError(1, "Operation not permitted", path)
+    monkeypatch.setattr(panes_mod, "load_image", boom)
+    w2 = Workspace()
+    assert w2.open_last_files() == []
+    assert shown == []
+    w2.close()
