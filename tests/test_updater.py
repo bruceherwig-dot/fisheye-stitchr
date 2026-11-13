@@ -105,3 +105,12 @@ def test_windows_build_carries_the_update_key_and_the_dll():
 def test_the_windows_feed_in_the_app_matches_the_publisher():
     from spherejoin import app
     assert app.WIN_FEED_URL == _publisher().LIVE_FEEDS["windows"]
+
+
+def test_the_app_only_leaves_through_hard_exit():
+    """On Windows, os._exit() unloads WinSparkle.dll under its running thread and crashes (access violation).
+    hard_exit() uses TerminateProcess there. A bare os._exit anywhere else would bring the crash back."""
+    src = (ROOT / "spherejoin" / "app.py").read_text()
+    body = src.split("def hard_exit", 1)[1].split("\ndef ", 1)[1]            # everything after hard_exit itself
+    assert "os._exit(" not in body
+    assert "TerminateProcess" in src

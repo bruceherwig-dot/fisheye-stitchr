@@ -18,6 +18,23 @@ WIN_FEED_URL = "https://bruceherwig-dot.github.io/fisheye-stitchr/appcast-window
 RELEASES_URL = "https://github.com/bruceherwig-dot/fisheye-stitchr/releases/latest"
 
 
+def hard_exit(code: int):
+    """Leave the process immediately, without Python's or the C runtime's normal teardown.
+
+    On Windows, os._exit() ends the process the polite way, which unloads every DLL. The update engine
+    (WinSparkle.dll) has a background thread, and unloading it under that thread crashed the built app with an
+    access violation at exit (CI, 2026-11-12). TerminateProcess skips the unloading. Everything is already saved
+    and flushed by the time we get here.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        kernel32.TerminateProcess(kernel32.GetCurrentProcess(), code & 0xFFFFFFFF)
+    os._exit(code)
+
+
 def numeric_version() -> str:
     """'0.10-beta' -> '0.10': the plain number the update engines compare."""
     return __version__.split("-")[0]
@@ -112,7 +129,7 @@ def _shutdown(app: QApplication, win: MainWindow, code: int):
             stream.flush()
         except Exception:
             pass
-    os._exit(code)
+    hard_exit(code)
 
 
 def _live_update_check(app: QApplication, win: MainWindow):
@@ -125,12 +142,12 @@ def _live_update_check(app: QApplication, win: MainWindow):
                                     lambda: result.__setitem__("v", "current"),
                                     lambda: result.__setitem__("v", "error"))
     if not winsparkle_updater.check_for_updates_quiet():
-        os._exit(1)
+        hard_exit(1)
     end = time.time() + 90
     while result["v"] is None and time.time() < end:
         app.processEvents()
         time.sleep(0.1)
-    os._exit({"found": 0, "current": 0, "error": 2}.get(result["v"], 3))
+    hard_exit({"found": 0, "current": 0, "error": 2}.get(result["v"], 3))
 
 
 def run(argv: list[str]):
@@ -166,7 +183,7 @@ def run(argv: list[str]):
         while time.time() < end:
             app.processEvents()
             time.sleep(0.05)
-        os._exit(0 if ok else 1)
+        hard_exit(0 if ok else 1)
     if os.environ.get("FISHEYE_UPDATER_CHECK") == "1" and sys.platform == "win32":
         _live_update_check(app, win)
     ws = win.workspace
