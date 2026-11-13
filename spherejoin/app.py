@@ -38,8 +38,7 @@ class MainWindow(QMainWindow):
     def show_about(self):
         QMessageBox.about(
             self, "About Fisheye StitchR",
-            f"<b>Fisheye StitchR {__version__}</b><br>Joins two back-to-back fisheye pictures into one 360-style panorama."
-            "<br><br>App icon: \"Lens\" by Amos Kofi Commey (kweikofi) from the Noun Project.")
+            f"<b>Fisheye StitchR {__version__}</b><br>Joins two back-to-back fisheye pictures into one 360-style panorama.")
 
     def show_note(self, text: str, ms: int = 12000):
         self.statusBar().showMessage(text, ms)
