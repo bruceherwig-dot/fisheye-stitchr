@@ -1,7 +1,8 @@
 """Build gate (Windows): the built .exe must carry our update-signing public key as the resource WinSparkle reads.
 
-WinSparkle looks for a resource of type "EdDSA" named "EdDSAPub" in the running .exe. If it is missing, the engine
-cannot check update signatures at all. Usage: python scripts/check_win_resource.py path\\to\\app.exe
+WinSparkle looks for a resource of type "EdDSA" named "EdDSAPub" in the running .exe (Windows treats resource names
+as case-insensitive and stores them in capitals). If it is missing, the engine cannot check update signatures at all.
+Usage: python scripts/check_win_resource.py path\\to\\app.exe
 """
 import pathlib
 import sys
@@ -18,12 +19,17 @@ def text(name):
 
 
 found = None
-for kind in getattr(pe, "DIRECTORY_ENTRY_RESOURCE", None).entries if hasattr(pe, "DIRECTORY_ENTRY_RESOURCE") else []:
-    if kind.name is not None and text(kind.name) == "EdDSA":
-        for item in kind.directory.entries:
-            if item.name is not None and text(item.name) == "EdDSAPub":
-                leaf = item.directory.entries[0].data.struct
-                found = pe.get_data(leaf.OffsetToData, leaf.Size).decode("ascii", "replace").strip("\x00 \r\n")
+listing = []
+root = getattr(pe, "DIRECTORY_ENTRY_RESOURCE", None)
+for kind in (root.entries if root else []):
+    kind_name = text(kind.name) if kind.name is not None else f"#{kind.id}"
+    for item in kind.directory.entries:
+        item_name = text(item.name) if item.name is not None else f"#{item.id}"
+        listing.append(f"{kind_name}/{item_name}")
+        if kind_name.upper() == "EDDSA" and item_name.upper() == "EDDSAPUB":
+            leaf = item.directory.entries[0].data.struct
+            found = pe.get_data(leaf.OffsetToData, leaf.Size).decode("ascii", "replace").strip("\x00 \r\n")
+print("resources in the .exe:", ", ".join(listing) or "(none)")
 if found is None:
     sys.exit("FAILED: the .exe has no EdDSA / EdDSAPub resource, so update signatures could not be checked.")
 if found != want:
