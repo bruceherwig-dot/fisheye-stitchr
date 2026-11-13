@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from .controls import ControlsPanel
 from . import autolevel, dual, exposure
-from .imageio_utils import load_image
+from .imageio_utils import load_image, open_failure_text
 from .export import (ExportCancelled, ExportSettings, default_output_path, export_panorama, read_icc,
                      recommended_width)
 from .export_dialog import ExportDialog
@@ -410,7 +410,7 @@ class Workspace(QWidget):
         try:
             arr = load_image(path)
         except Exception as e:
-            QMessageBox.warning(self, "Could not open image", f"{path}\n\n{e}")
+            QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
             return False
         left, right = dual.split_halves(arr)
         preset = dual.preset_for(path, (arr.shape[1], arr.shape[0]))

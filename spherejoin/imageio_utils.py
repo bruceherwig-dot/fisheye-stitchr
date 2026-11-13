@@ -10,6 +10,23 @@ import tifffile
 SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".insp")   # .insp is an Insta360 JPEG
 
 
+def open_failure_text(path: str, err: Exception) -> str:
+    """Plain-English message for a photo that would not open, with the likely reason first."""
+    name = os.path.basename(path) or path
+    if not os.path.exists(path):
+        why = "The file was not found. It may have been moved or renamed."
+    elif isinstance(err, PermissionError) or not os.access(path, os.R_OK):
+        why = ("The app is not allowed to read this file. If it is in Desktop, Documents or Downloads, "
+               "allow Fisheye StitchR under System Settings > Privacy & Security > Files and Folders.")
+    elif os.path.splitext(path)[1].lower() not in SUPPORTED_EXTENSIONS:
+        why = "This kind of file is not supported. Use JPEG, PNG, TIFF or Insta360 .insp."
+    else:
+        why = "The file may be damaged or not a normal picture."
+    detail = str(err).strip()
+    detail = f"\n\nDetails: {detail}" if detail and detail != path else ""
+    return f"Could not open {name}.\n\n{why}{detail}"
+
+
 def _to_rgb(arr: np.ndarray) -> np.ndarray:
     """Make any channel layout into HxWx3 RGB, dropping alpha and expanding gray."""
     if arr.ndim == 2:

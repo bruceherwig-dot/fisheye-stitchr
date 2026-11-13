@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from .circle import auto_detect_circle
 from . import ui_state
 from .collapsible import CollapsibleSection
-from .imageio_utils import SUPPORTED_EXTENSIONS, load_image
+from .imageio_utils import SUPPORTED_EXTENSIONS, load_image, open_failure_text
 from .viewer import ZoomPanView
 
 
@@ -179,7 +179,7 @@ class ImagePane(QWidget):
         try:
             arr = load_image(path)
         except Exception as e:  # show the problem, keep the app alive
-            QMessageBox.warning(self, "Could not open image", f"{path}\n\n{e}")
+            QMessageBox.warning(self, "Could not open image", open_failure_text(path, e))
             return
         ui_state.set_str(f"last_files/{self.title[:1].lower()}", os.path.abspath(path))   # reopened next time
         self.load_array(arr, path, os.path.basename(path))

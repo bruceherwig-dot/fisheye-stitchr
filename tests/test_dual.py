@@ -167,3 +167,15 @@ def test_double_click_on_the_preview_zooms_in_then_back_to_fit():
     assert view.zoom_level() > fit * 1.5
     QTest.mouseDClick(view.viewport(), Qt.LeftButton)
     assert view.zoom_level() == pytest.approx(fit, rel=0.02)
+
+
+def test_open_failure_message_says_why(tmp_path):
+    from spherejoin.imageio_utils import open_failure_text
+    missing = tmp_path / "gone.jpg"
+    assert "not found" in open_failure_text(str(missing), FileNotFoundError(str(missing)))
+    odd = tmp_path / "notes.txt"
+    odd.write_text("x")
+    assert "not supported" in open_failure_text(str(odd), ValueError("bad"))
+    bad = tmp_path / "broken.jpg"
+    bad.write_text("x")
+    assert "damaged" in open_failure_text(str(bad), ValueError("bad"))
