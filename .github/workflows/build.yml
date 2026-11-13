@@ -129,6 +129,12 @@ jobs:
           }
           if ($p.ExitCode -ne 0) { exit 1 }
         shell: pwsh
+      - name: Show the updater log
+        if: always()
+        run: |
+          $log = "$env:USERPROFILE\.fisheye_stitchr\winsparkle_debug.log"
+          if (Test-Path $log) { Get-Content $log } else { Write-Host "no updater log was written" }
+        shell: pwsh
       - name: Read version
         id: version
         run: echo "version=$((Get-Content version.txt).Split('-')[0])" >> $env:GITHUB_OUTPUT

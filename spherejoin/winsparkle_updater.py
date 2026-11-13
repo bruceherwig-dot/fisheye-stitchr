@@ -19,6 +19,20 @@ import os
 import sys
 
 _dll = None
+_LOG_PATH = os.path.expanduser("~/.fisheye_stitchr/winsparkle_debug.log")
+
+
+def _log(msg: str):
+    """Timestamped line in a diagnostic log (a windowed Windows app has no console). Best effort."""
+    try:
+        import time
+        os.makedirs(os.path.dirname(_LOG_PATH), exist_ok=True)
+        with open(_LOG_PATH, "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+    except Exception:
+        pass
+
+
 _CB = ctypes.CFUNCTYPE(None)        # void (*)(void), the shape of every callback below
 
 # Kept at module level so ctypes does not free them while WinSparkle holds their pointers.
@@ -71,10 +85,12 @@ def init_winsparkle(appcast_url: str, app_name: str, app_version: str, company_n
     """Start WinSparkle. Call once at startup. Returns True when the engine is running."""
     global _dll, _error_cb, _found_cb, _notfound_cb
     path = _find_dll()
+    _log(f"init_winsparkle: dll path = {path}")
     if path is None:
         return False
     try:
         dll = ctypes.CDLL(path)
+        _log("init_winsparkle: dll loaded")
         dll.win_sparkle_set_appcast_url.argtypes = [ctypes.c_char_p]            # NARROW, see the note above
         dll.win_sparkle_set_app_details.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_wchar_p]
         dll.win_sparkle_set_automatic_check_for_updates.argtypes = [ctypes.c_int]
@@ -98,10 +114,13 @@ def init_winsparkle(appcast_url: str, app_name: str, app_version: str, company_n
             dll.win_sparkle_set_did_not_find_update_callback(_notfound_cb)
         except Exception:
             _found_cb = _notfound_cb = None
+        _log("init_winsparkle: configured; calling win_sparkle_init")
         dll.win_sparkle_init()
         _dll = dll
+        _log("init_winsparkle: started")
         return True
-    except Exception:
+    except Exception as e:
+        _log(f"init_winsparkle: EXCEPTION {e!r}")
         _dll = None
         return False
 
@@ -138,5 +157,13 @@ def check_for_updates() -> bool:
 
 
 def cleanup():
+    """Stop WinSparkle's background thread. Call before the program exits, or the thread can still be running
+    while the process is torn down (a Windows access-violation crash at exit)."""
+    global _dll
     if _dll is not None:
-        _dll.win_sparkle_cleanup()
+        _log("cleanup")
+        try:
+            _dll.win_sparkle_cleanup()
+        except Exception as e:
+            _log(f"cleanup: EXCEPTION {e!r}")
+        _dll = None
