@@ -5,5 +5,12 @@
         <link>https://github.com/bruceherwig-dot/fisheye-stitchr</link>
         <description>Updates for Fisheye StitchR on Windows</description>
         <language>en</language>
+        <item>
+            <title>Version 0.11-beta</title>
+            <pubDate>Sat, 14 Nov 2026 02:52:44 +0000</pubDate>
+            <sparkle:version>0.11</sparkle:version>
+            <sparkle:shortVersionString>0.11-beta</sparkle:shortVersionString>
+            <enclosure url="https://github.com/bruceherwig-dot/fisheye-stitchr/releases/download/v0.11-beta/FisheyeStitchRSetup.exe" length="71510797" type="application/octet-stream" sparkle:edSignature="5gnXrlSn3O6/EV8HHydU2G2WXNwLTnGMVsU7Xv29nxrFGGyTxxCdV5feMIiimvc+7KEqcQQrQ+nMNWxFGJYCDg=="/>
+        </item>
     </channel>
 </rss>
