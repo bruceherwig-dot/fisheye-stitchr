@@ -2,6 +2,14 @@
 
 ---
 
+## v0.11-beta (2026-11-13)
+First version for Windows.
+- Windows installer (FisheyeStitchRSetup.zip, with the plain .exe inside it and also attached on its own for the updater). Updates through WinSparkle, signed with the same key as the Mac app.
+- The build now stops if any name in the code is undefined, before any app is built.
+- On Windows, File > Check for Updates... says whether you are up to date, or opens the update window, or explains and links to the download page if the check was blocked.
+
+---
+
 ## v0.10-beta (2026-11-12)
 First version that updates itself.
 - Automatic updates through Sparkle: the app checks once a day and from File > Check for Updates..., shows its own "new version" window, then downloads, installs and restarts. Updates are signed; the app refuses anything not signed with our key.

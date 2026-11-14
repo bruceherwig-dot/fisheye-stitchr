@@ -48,3 +48,24 @@ build, publish a throwaway higher version (`vX.YY-test`) so the feed has somethi
 File > Check for Updates..., confirm Sparkle's window appears with no crash, click Skip. Then delete the throwaway
 release and tag and remove its entry from the feed. Diagnostic log on every machine:
 `~/.fisheye_stitchr/sparkle_debug.log`.
+
+## Windows (added 2026-11-13)
+- Engine: WinSparkle (`vendored/winsparkle/WinSparkle.dll`, copied next to the .exe by `build_app.py`), driven from
+  `spherejoin/winsparkle_updater.py` and `spherejoin/app.py`. Feed: `appcast-windows.xml` on the same GitHub Pages site.
+- The feed MUST advertise `FisheyeStitchRSetup.exe`, never the `.zip`: WinSparkle runs the downloaded file with no
+  arguments, so a zip just opens in Explorer and installs nothing (Star Trail CleanR shipped that bug for months).
+  `scripts/publish_appcast.py` refuses to publish anything else. The zip is for people downloading by hand
+  (it dodges Edge SmartScreen).
+- Signature check: the public key is stored inside the .exe as resource EdDSA/EdDSAPub (Windows capitalizes the names;
+  matching is case-insensitive). CI gate `scripts/check_win_resource.py` fails the build if it is missing.
+- Feed URL passed to WinSparkle must be a NARROW string (`c_char_p`). Declared wide, the engine reads "h" and every
+  check fails.
+- Quiet-first manual check: File > Check for Updates... runs a check with no engine windows; only a confirmed find
+  opens the engine's window; "up to date" and "error" are our own dialogs.
+- EXIT: never call `win_sparkle_cleanup()` and never leave through `os._exit()` on Windows. Both crash the built app
+  (access violation) because the engine's thread is still running while the DLL is unloaded. The app leaves through
+  `hard_exit()` in `app.py`, which uses TerminateProcess on Windows. A test guards this.
+- CI gates on Windows: update-key resource, launch, updater-alive (FISHEYE_UPDATER_SMOKE=1), live-check
+  (FISHEYE_UPDATER_CHECK=1: a real check against the live feed). Diagnostic log: `~/.fisheye_stitchr/winsparkle_debug.log`.
+- RUN half: `.github/workflows/updater_install_test.yml` (manual dispatch) installs an older Windows release and runs what
+  the live feed advertises. Run it before trusting the Windows install path; needs two Windows releases.
